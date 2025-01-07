@@ -1,61 +1,27 @@
-ï»¿#include <iostream>
-#include <fstream>
-#include <nlohmann/json.hpp>
-#include <map>
+#include "MYDBSM.h"
+#include "ui_MYDBSM.h"
 
-using namespace std;
-using json = nlohmann::json;
-typedef map<string, string> mss;
-
-void saveMapInJson(mss my_map, string file_path)
+MYDBSM::MYDBSM(QWidget *parent)
+    : QMainWindow(parent)
 {
+    ui.setupUi(this);
+    //connect(ui->aa, &QPushButton::clicked, this, &MYDBSM::handleClick);
 
-    // ä½¿ç”¨nlohmann::jsonæ¥ä¿å­˜mapåˆ°JSON
-    nlohmann::json json_map;
-    for (const auto& pair : my_map) {
-        json_map[pair.first] = pair.second;
-    }
-
-    // å°†JSONå¯¹è±¡è¾“å‡ºåˆ°æ–‡ä»¶
-    std::ofstream o(file_path);
-    o << json_map.dump(4); // ä½¿ç”¨4ä¸ªç©ºæ ¼ç¼©è¿›
-    o.close();
-
+    connect(ui.button_choice, &QPushButton::clicked, this, &MYDBSM::onButtonChoiceClicked);
 }
 
-mss readMapFromJsonFile(string file_path)
+
+MYDBSM::~MYDBSM()
+{}
+
+void MYDBSM::onButtonChoiceClicked()
 {
-    // æ‰“å¼€JSONæ–‡ä»¶
-    std::ifstream file(file_path);
-    if (!file.is_open()) {
-        std::cerr << "æ— æ³•æ‰“å¼€æ–‡ä»¶" << std::endl;
-        return {};
+    // µ¯³öÎÄ¼şÑ¡Ôñ¶Ô»°¿ò
+    QString filePath = QFileDialog::getOpenFileName(this, "select database", "", "all files (*.*);;database file (*.dbf);;json file (*.json)");
+
+    // Èç¹ûÎÄ¼şÂ·¾¶²»Îª¿Õ£¬ÔòÏÔÊ¾ËùÑ¡ÎÄ¼şµÄÂ·¾¶
+    if (!filePath.isEmpty()) {
+        //QMessageBox::information(this, "ÎÄ¼şÑ¡Ôñ", "ÄúÑ¡ÔñµÄÎÄ¼şÊÇ: " + filePath);
+        ui.label_root->setText(filePath);
     }
-
-    // ä»æ–‡ä»¶æµè§£æJSON
-    json j = json::parse(file);
-    file.close();
-    mss myMap;
-
-    // éå†JSONå¯¹è±¡ï¼Œå¹¶å°†å…¶å­˜å…¥map
-    for (auto& element : j.items()) {
-        myMap[element.key()] = element.value();
-    }
-
-    // è¾“å‡ºmapå†…å®¹
-    for (auto& pair : myMap) {
-        std::cout << pair.first << " : " << pair.second << std::endl;
-    }
-    return myMap;
-
-}
-
-void creat
-
-int main() {
-    // åˆ›å»ºä¸€ä¸ªmap
-    mss my_map = { {"apple", "5"}, {"banana", "8"}, {"cherry", "2"} };
-    saveMapInJson(my_map, "output.json");
-    mss data1=readMapFromJsonFile("output.json");
-    return 0;
 }
