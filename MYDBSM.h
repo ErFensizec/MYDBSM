@@ -15,6 +15,7 @@ public:
     ~MYDBSM();
 private slots:
     void onButtonChoiceClicked();  // ²Ûº¯Êý
+    void refreshTableFromFile();
 private:
     Ui::MYDBSMClass ui;
 };

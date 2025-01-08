@@ -134,38 +134,5 @@
  <resources>
   <include location="MYDBSM.qrc"/>
  </resources>
- <connections>
-  <connection>
-   <sender>button_choice</sender>
-   <signal>clicked()</signal>
-   <receiver>label_root</receiver>
-   <slot>clear()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>49</x>
-     <y>56</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>251</x>
-     <y>59</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>button_choice</sender>
-   <signal>clicked()</signal>
-   <receiver>table_result</receiver>
-   <slot>clear()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>50</x>
-     <y>62</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>54</x>
-     <y>111</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>
