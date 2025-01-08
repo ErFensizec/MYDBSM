@@ -5,6 +5,7 @@
 #include <QFileDialog>
 #include <QMessageBox>
 #include "ui_MYDBSM.h"
+#include "DBMAKER.h"
 
 class MYDBSM : public QMainWindow
 {
@@ -15,6 +16,7 @@ public:
     ~MYDBSM();
 private slots:
     void onButtonChoiceClicked();  // ²Ûº¯Êý
+    void onCommitCommand();
     void refreshTableFromFile();
 private:
     Ui::MYDBSMClass ui;
