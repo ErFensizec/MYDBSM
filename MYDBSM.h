@@ -17,6 +17,8 @@ public:
 private slots:
     void onButtonChoiceClicked();  // ²Ûº¯Êý
     void onCommitCommand();
+    void onEditTable(QTableWidgetItem* item);
+    void onSelectTable(const QItemSelection& selected, const QItemSelection& deselected);
     void refreshTableFromFile();
 private:
     Ui::MYDBSMClass ui;

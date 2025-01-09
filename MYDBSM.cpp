@@ -8,6 +8,9 @@ using namespace std;
 
 mss mapdata;
 QString filePath = "";
+QString pureFilePath = "";
+QString selecting_field;
+bool loaded = false;
 MYDBSM::MYDBSM(QWidget *parent)
     : QMainWindow(parent)
 {
@@ -16,6 +19,8 @@ MYDBSM::MYDBSM(QWidget *parent)
 
     connect(ui.button_choice, &QPushButton::clicked, this, &MYDBSM::onButtonChoiceClicked);
     connect(ui.button_commit, &QPushButton::clicked, this, &MYDBSM::onCommitCommand);
+    connect(ui.table_result, &QTableWidget::itemChanged, this, &MYDBSM::onEditTable);
+    connect(ui.table_result->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MYDBSM::onSelectTable);
 }
 
 
@@ -25,6 +30,7 @@ MYDBSM::~MYDBSM()
 void MYDBSM::onButtonChoiceClicked()
 {
     // 弹出文件选择对话框
+    loaded = false;
     filePath = QFileDialog::getOpenFileName(this, "select database", "", "all files (*.*);;database file (*.dbf);;json file (*.json)");
 
     // 如果文件路径不为空，则显示所选文件的路径
@@ -63,20 +69,32 @@ void MYDBSM::onButtonChoiceClicked()
                 ui.table_result->setRowCount(ui.table_result->rowCount() + 1);
                 rowNo++;
                 //QMessageBox::information(this, "Help", QString::fromStdString(string(tableJson["table_name"])));
-                ui.table_result->setItem(rowNo - 1, 0, new QTableWidgetItem(QString::fromStdString(tableJson["table_name"])));
-                ui.table_result->setItem(rowNo - 1, 1, new QTableWidgetItem(QString::fromStdString(field["name"])));
-                ui.table_result->setItem(rowNo - 1, 2, new QTableWidgetItem(QString::fromStdString(field["type"])));
-                ui.table_result->setItem(rowNo - 1, 3, new QTableWidgetItem(QString::fromStdString(field["key_flag"])));
-                ui.table_result->setItem(rowNo - 1, 4, new QTableWidgetItem(QString::fromStdString(field["null_flag"])));
-                ui.table_result->setItem(rowNo - 1, 5, new QTableWidgetItem(QString::fromStdString(field["valid_flag"])));
+                vector<string> headers ({"table_name","name","type","key_flag","null_flag","valid_flag" });
+                QTableWidgetItem* t;
+                for (int i = 0; i < headers.size(); i++)
+                {
+                    if(i==0)
+                        ui.table_result->setItem(rowNo - 1, 0, new QTableWidgetItem(QString::fromStdString(tableJson[headers[0]])));
+                    else
+                        ui.table_result->setItem(rowNo - 1, i, new QTableWidgetItem(QString::fromStdString(field[headers[i]])));
+                    t = ui.table_result->item(rowNo - 1, i);
+                    if (t) {
+                        if(i==0||i==3||i==4||i==5)
+                            t->setFlags(t->flags() & ~Qt::ItemIsEditable);//禁止编辑table_name,key_flag,null_flag,valid_flag
+                    }
+                }
+                
             }
         }
+        loaded = true;
     }
     catch (...) {
-        QMessageBox::information(this, "Alert", "Invalid Database!");
+        inFile.close();
+        QMessageBox::information(this, "Alert", "Invalid Database File!");
         ui.table_result->horizontalHeader()->setVisible(false);
         ui.table_result->setRowCount(0);
         ui.table_result->setColumnCount(6);
+        loaded = false;
     }
 }
 bool endsWith(const std::string& str, const std::string& suffix) {
@@ -91,10 +109,12 @@ void MYDBSM::refreshTableFromFile() {
         string temps = filePath.toStdString();
         vector<string> res;
         if (endsWith(filePath.toStdString(), ".dbf")) {
-            res = streamParse("READ DATABASE " + temps.substr(0, temps.size() - 4) + ";");
+            pureFilePath = QString::fromStdString(temps.substr(0, temps.size() - 4));
+            res = streamParse("READ DATABASE " + pureFilePath.toStdString() + ";");
         }
         else {
-            res = streamParse("READ DATABASE " + temps + ";");
+            pureFilePath = QString::fromStdString(temps.substr(0, temps.size()));
+            res = streamParse("READ DATABASE " + pureFilePath.toStdString() + ";");
         }
         //res = streamParse("READ DATABASE C:/my_codes/MYDBSM/DB;");
         /*for (int i = 0; i < res.size(); i++) {
@@ -179,5 +199,50 @@ void MYDBSM::onCommitCommand() {
     for (int i = 0; i < res.size(); i++) {
         ui.list_info->addItem(QString::fromStdString(res[i]));
         //QMessageBox::information(this, "Help", QString::fromStdString(res[i]));
+    }
+}
+
+
+void MYDBSM::onEditTable(QTableWidgetItem* item) {
+    //QMessageBox::information(this, "Help","Modifying");
+    int row = item->row();
+    int column = item->column();
+
+    // 获取修改前的内容
+    QString oldValue = item->data(Qt::EditRole).toString();
+
+    // 获取修改后的内容
+    QString newValue = item->text();
+    QString fieldname, tablename;
+    tablename = ui.table_result->item(row, 0)->text();
+    if(column>=1)
+        fieldname = ui.table_result->item(row, 1)->text();
+    QString databasename = pureFilePath;
+    if (loaded) {
+        //保存
+        vector<string> res;
+        //QMessageBox::information(this, "Help", oldValue==newValue?"y" :"n");
+        if(column==1)////MODIFY FIELD oldName TO newName IN tableName IN databaseName;
+        {
+            res = streamParse("MODIFY FIELD " + selecting_field.toStdString() + " TO " + newValue.toStdString() + " IN " + tablename.toStdString() + " IN " + pureFilePath.toStdString() + ";");
+        }
+        if (column == 2)// MODIFY FIELD oldName TYPE newType IN tableName IN databaseName;
+        {
+            res = streamParse("MODIFY FIELD " + fieldname.toStdString() + " TYPE " + newValue.toStdString() + " IN " + tablename.toStdString() + " IN " + pureFilePath.toStdString() + ";");
+        }
+        
+        for (int i = 0; i < res.size(); i++) {
+            ui.list_info->addItem(QString::fromStdString(res[i]));
+        }
+    }
+
+}
+
+void MYDBSM::onSelectTable(const QItemSelection& selected, const QItemSelection& deselected) {
+    if (!selected.isEmpty()) {
+        // 获取当前选中的单元格（可以处理多个单元格，但这里假设每次只选中一个）
+        QModelIndex currentIndex = selected.indexes().first();
+        selecting_field= ui.table_result->item(currentIndex.row(), 1)->text();
+        //qDebug() << "Currently selected cell (" << currentIndex.row() << "," << currentIndex.column() << ") contains:" << currentText;
     }
 }

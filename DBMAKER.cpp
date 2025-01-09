@@ -533,7 +533,6 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
     json dbJson;
     inFile >> dbJson;
     inFile.close();
-
     for (auto& tableJson : dbJson["tables"]) {
         if (tableJson["table_name"] == tableName) {
             for (auto& field : tableJson["fields"]) {
@@ -548,9 +547,11 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
 
                     // 保存修改后的数据库文件
                     ofstream outFile(filePath);
-                    outFile << dbJson.dump(4);
-                    outFile.close();
-
+                    if (outFile.is_open()) {
+                        outFile << dbJson.dump(4);
+                        //output << dbJson;
+                        outFile.close();
+                    }
                     cout << "字段 " << oldFieldName << " 已成功";
                     output<< "字段 " << oldFieldName << " 已成功";
                     if (!newFieldName.empty()) {
@@ -699,9 +700,9 @@ void handleModifyField(const string& sql) {
     // 1. 修改字段名和类型: MODIFY FIELD oldName TO newName TYPE newType IN tableName IN databaseName;
     // 2. 仅修改字段名: MODIFY FIELD oldName TO newName IN tableName IN databaseName;
     // 3. 仅修改字段类型: MODIFY FIELD oldName TYPE newType IN tableName IN databaseName;
-    regex modifyRegexFull(R"(MODIFY FIELD (\w+)\s+TO\s+(\w+)\s+TYPE\s+(\w+\[\d+\]|\w+)\s+IN\s+(\w+)\s+IN\s+(\w+);)", regex_constants::icase);
-    regex modifyRegexNameOnly(R"(MODIFY FIELD (\w+)\s+TO\s+(\w+)\s+IN\s+(\w+)\s+IN\s+(\w+);)", regex_constants::icase);
-    regex modifyRegexTypeOnly(R"(MODIFY FIELD (\w+)\s+TYPE\s+(\w+\[\d+\]|\w+)\s+IN\s+(\w+)\s+IN\s+(\w+);)", regex_constants::icase);
+    regex modifyRegexFull(R"(MODIFY FIELD (\w+)\s+TO\s+(\w+)\s+TYPE\s+(\w+\[\d+\]|\w+)\s+IN\s+(\w+)\s+IN\s+(\S+);)", regex_constants::icase);
+    regex modifyRegexNameOnly(R"(MODIFY FIELD (\w+)\s+TO\s+(\w+)\s+IN\s+(\w+)\s+IN\s+(\S+);)", regex_constants::icase);
+    regex modifyRegexTypeOnly(R"(MODIFY FIELD (\w+)\s+TYPE\s+(\w+\[\d+\]|\w+)\s+IN\s+(\w+)\s+IN\s+(\S+);)", regex_constants::icase);
 
     smatch match;
 
