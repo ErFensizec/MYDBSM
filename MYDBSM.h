@@ -19,6 +19,7 @@ private slots:
     void onCommitCommand();
     void onEditTable(QTableWidgetItem* item);
     void onSelectTable(const QItemSelection& selected, const QItemSelection& deselected);
+    void onDoubleClickTable(int row, int column);
     void refreshTableFromFile();
 private:
     Ui::MYDBSMClass ui;

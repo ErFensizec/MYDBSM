@@ -21,6 +21,7 @@ MYDBSM::MYDBSM(QWidget *parent)
     connect(ui.button_commit, &QPushButton::clicked, this, &MYDBSM::onCommitCommand);
     connect(ui.table_result, &QTableWidget::itemChanged, this, &MYDBSM::onEditTable);
     connect(ui.table_result->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MYDBSM::onSelectTable);
+    connect(ui.table_result, &QTableWidget::cellDoubleClicked, this, &MYDBSM::onDoubleClickTable);
 }
 
 
@@ -245,4 +246,9 @@ void MYDBSM::onSelectTable(const QItemSelection& selected, const QItemSelection&
         selecting_field= ui.table_result->item(currentIndex.row(), 1)->text();
         //qDebug() << "Currently selected cell (" << currentIndex.row() << "," << currentIndex.column() << ") contains:" << currentText;
     }
+}
+
+void MYDBSM::onDoubleClickTable(int row, int column) {
+    QMessageBox::information(this, "Help", QString::fromStdString("clicking "+to_string(row) + "," + to_string(column)));
+
 }

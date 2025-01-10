@@ -34,9 +34,9 @@
                 },
                 {
                     "key_flag": "NOT_KEY",
-                    "name": "AgeLong",
+                    "name": "Age",
                     "null_flag": "NO_NULL",
-                    "type": "int65536",
+                    "type": "int",
                     "valid_flag": "VALID"
                 },
                 {
