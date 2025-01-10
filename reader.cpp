@@ -3,19 +3,35 @@
 #include <nlohmann/json.hpp>
 #include <map>
 #include <reader.h>
+#include <vector>
 //#include <reader.h>
 
 using namespace std;
 using json = nlohmann::json;
 typedef map<string, string> mss;
+const int FIELD_NAME_LENGTH = 50;
 
-void saveMapInJson(mss my_map, string file_path)
+typedef struct {
+    char sFieldName[FIELD_NAME_LENGTH];  //字段名
+    char sType[8];  //字段类型
+    int iSize;  //字长
+    char bKey;  //该字段是否为KEY键
+    char bNullFlag;  //该字段是否允许为空
+    char bValidFlag;  //该字段是否有效，可用于以后对表中该字段的删除
+} TableMode, * PTableMode;
+
+
+void saveDBInJson(vector<mss>db, string file_path)
 {
 
     // 使用nlohmann::json来保存map到JSON
-    nlohmann::json json_map;
-    for (const auto& pair : my_map) {
-        json_map[pair.first] = pair.second;
+    nlohmann::json json_map,json_list;
+    for (int i = 0; i < db.size();i++) {
+        for (auto it = db[i].begin(); it != db[i].end(); ++it) {
+            // 使用it->first和it->second访问键和值
+            json_map[it->first] = it->second;
+        }
+        
     }
 
     // 将JSON对象输出到文件
