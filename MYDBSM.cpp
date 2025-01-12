@@ -248,7 +248,55 @@ void MYDBSM::onSelectTable(const QItemSelection& selected, const QItemSelection&
     }
 }
 
+std::vector<std::string> split(const std::string& text, char delimiter) {
+    std::vector<std::string> tokens;
+    std::string token;
+    std::istringstream tokenStream(text);
+    while (std::getline(tokenStream, token, delimiter)) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
 void MYDBSM::onDoubleClickTable(int row, int column) {
-    QMessageBox::information(this, "Help", QString::fromStdString("clicking "+to_string(row) + "," + to_string(column)));
+    //QMessageBox::information(this, "Help", QString::fromStdString("clicking "+to_string(row) + "," + to_string(column)));
+    string temps = filePath.toStdString();
+    string tablename = ui.table_result->item(row, 0)->text().toStdString();
+    vector<string> res ;
+    res = streamParse("SHOW CONTENT " + tablename + " in "+ pureFilePath.toStdString() + ";");
+    for (int i = 0; i < res.size(); i++) {
+        ui.list_info->addItem(QString::fromStdString(res[i]));
+        //QMessageBox::information(this, "Help", QString::fromStdString(res[i]));
+    }
+    string dataString = res[res.size() - 1];
+    //QMessageBox::information(this, "Help", QString::fromStdString(dataString));
+    string header,body;
+    vector<string>headers, bodies;
+    std::istringstream ds(dataString);
+    getline(ds,header);
+    headers = split(header, ',');
+    ui.table_result2->setColumnCount(headers.size());
+    ui.table_result2->horizontalHeader()->setVisible(true);
+    ui.table_result2->setRowCount(0);
+    for (int i = 0; i < ui.table_result2->columnCount(); i++)
+    {
+        try {ui.table_result2->setHorizontalHeaderItem(i,new QTableWidgetItem(QString::fromStdString(headers[i])));}
+        catch (...) {
+            QMessageBox::information(this, "Help", "something invalid in table");
+        }
+        
+    }
+    while (std::getline(ds, body)) {
+        ui.table_result2->setRowCount(ui.table_result2->rowCount()+1);
+        int row = ui.table_result2->rowCount()-1;
+        bodies = split(body,',');
+        for (int i = 0; i < ui.table_result2->columnCount(); i++) {
+            try{ui.table_result2->setItem(row, i, new QTableWidgetItem(QString::fromStdString(bodies[i])));}
+            catch (...) {
+                QMessageBox::information(this, "Help", "something invalid in table");
+            }
+        }
+    }
+    ui.label_current_table->setText(QString::fromStdString(tablename));
 
 }

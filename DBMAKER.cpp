@@ -591,7 +591,7 @@ void handleCreateTable(const string& sql, map<string, vector<Table>>& databaseTa
 
 //表修改封装
 void handleEditTable(const string& sql) {
-    regex editRegex(R"(EDIT TABLE (\w+)\s*\(\s*(.+?)\s*\)\s*IN\s+(\w+);)", regex_constants::icase);
+    regex editRegex(R"(EDIT TABLE (\w+)\s*\(\s*(.+?)\s*\)\s*IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, editRegex)) {
         string tableName = match[1];
@@ -617,7 +617,7 @@ void handleEditTable(const string& sql) {
 
 //表重命名封装
 void handleRenameTable(const string& sql) {
-    regex renameRegex(R"(RENAME TABLE (\w+)\s+(\w+)\s+IN\s+(\w+);)", regex_constants::icase);
+    regex renameRegex(R"(RENAME TABLE (\w+)\s+(\w+)\s+IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, renameRegex)) {
         string oldTableName = match[1];
@@ -634,7 +634,7 @@ void handleRenameTable(const string& sql) {
 
 //表删除封装
 void handleDropTable(const string& sql) {
-    regex dropRegex(R"(DROP TABLE (\w+)\s+IN\s+(\w+);)", regex_constants::icase);
+    regex dropRegex(R"(DROP TABLE (\w+)\s+IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, dropRegex)) {
         string tableName = match[1];
@@ -664,7 +664,7 @@ void handleReadDatabase(const string& sql) {
 
 //增加字段封装
 void handleAddField(const string& sql) {
-    regex addRegex(R"(ADD FIELD (\w+)\s*\((.+)\)\s*IN\s+(\w+);)", regex_constants::icase);
+    regex addRegex(R"(ADD FIELD (\w+)\s*\((.+)\)\s*IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, addRegex)) {
         string tableName = match[1];
@@ -680,7 +680,7 @@ void handleAddField(const string& sql) {
 
 //删除字段封装
 void handleRemoveField(const string& sql) {
-    regex removeRegex(R"(REMOVE FIELD (\w+)\s+IN\s+(\w+)\s+IN\s+(\w+);)", regex_constants::icase);
+    regex removeRegex(R"(REMOVE FIELD (\w+)\s+IN\s+(\w+)\s+IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, removeRegex)) {
         string fieldName = match[1];
@@ -743,6 +743,7 @@ map<string, vector<Table>> loadDatabaseTables(const string& jsonFilePath) {
     ifstream inFile(jsonFilePath);
     if (!inFile.is_open()) {
         cerr << "无法打开文件: " << jsonFilePath << endl;
+        output<< "无法打开文件: " << jsonFilePath << endl;
         return {};
     }
 
@@ -754,7 +755,8 @@ map<string, vector<Table>> loadDatabaseTables(const string& jsonFilePath) {
     for (const auto& tableJson : dbJson["tables"]) {
         Table table;
         table.tableName = tableJson["table_name"].get<string>();
-        table.databaseName = tableJson["database_name"].get<string>();
+        //table.databaseName = tableJson["database_name"].get<string>();
+        table.databaseName = jsonFilePath.substr(0,jsonFilePath.size() - 4);
         table.fieldCount = tableJson.contains("field_count")
             ? tableJson["field_count"].get<int>()
             : tableJson["fields"].size();
@@ -1184,7 +1186,7 @@ void updateRecordInTableFile(const string& databaseName, const string& tableName
 
 void handleInsertRecord(const string& sql, map<string, vector<Table>>& databaseTables) {
     // 定义 INSERT INTO 的正则表达式
-    regex insertRegex(R"(INSERT\s+INTO\s+(\w+)\s+VALUES\s*\(([^)]+)\)\s+IN\s+(\w+)\s*;)", regex_constants::icase);
+    regex insertRegex(R"(INSERT\s+INTO\s+(\w+)\s+VALUES\s*\(([^)]+)\)\s+IN\s+(\S+)\s*;)", regex_constants::icase);
     smatch match;
 
     // 检查 SQL 语句是否匹配
@@ -1225,7 +1227,7 @@ void handleInsertRecord(const string& sql, map<string, vector<Table>>& databaseT
 
 void handleDeleteRecord(const string& sql, map<string, vector<Table>>& databaseTables) {
     // 定义 DELETE FROM 的正则表达式，支持多个条件
-    regex deleteRegex(R"(DELETE\s+FROM\s+(\w+)\s+WHERE\s+(.+?)\s+IN\s+(\w+)\s*;)", regex_constants::icase);
+    regex deleteRegex(R"(DELETE\s+FROM\s+(\w+)\s+WHERE\s+(.+?)\s+IN\s+(\S+)\s*;)", regex_constants::icase);
     smatch match;
 
     // 检查 SQL 语句是否匹配
@@ -1274,7 +1276,7 @@ void handleDeleteRecord(const string& sql, map<string, vector<Table>>& databaseT
 void handleUpdateRecord(const string& sql, map<string, vector<Table>>& databaseTables) {
     // 定义 UPDATE 的正则表达式，支持多个条件和括号
     regex updateRegex(
-        R"(UPDATE\s+(\w+)\s*\(\s*SET\s+(\w+)\s*=\s*([^)]+)\s+WHERE\s+(.+?)\s*\)\s+IN\s+(\w+)\s*;)",
+        R"(UPDATE\s+(\w+)\s*\(\s*SET\s+(\w+)\s*=\s*([^)]+)\s+WHERE\s+(.+?)\s*\)\s+IN\s+(\S+)\s*;)",
         regex_constants::icase
     );
     smatch match;
@@ -1326,7 +1328,7 @@ void handleUpdateRecord(const string& sql, map<string, vector<Table>>& databaseT
 
 void handleShowContent(const string& sql, map<string, vector<Table>>& databaseTables) {
     // 定义 SHOW CONTENT 的正则表达式
-    regex showRegex(R"(SHOW\s+CONTENT\s+(\w+)\s+IN\s+(\w+)\s*;)", regex_constants::icase);
+    regex showRegex(R"(SHOW\s+CONTENT\s+(\w+)\s+IN\s+(\S+)\s*;)", regex_constants::icase);
     smatch match;
 
     // 检查 SQL 语句是否匹配
@@ -1339,6 +1341,9 @@ void handleShowContent(const string& sql, map<string, vector<Table>>& databaseTa
             cout << "检测到数据库尚未加载，尝试加载数据库：" << databaseName << endl;
             output << "检测到数据库尚未加载，尝试加载数据库：" << databaseName << endl;
             databaseTables = loadDatabaseTables(databaseName + ".dbf");
+            //output << "isEmpty:" << databaseTables.empty() << endl;
+            //output << "hasDB:" << databaseTables["DB"][0].tableName << endl;
+            //output << "hasC:/.../DB:" << databaseTables["C:/my_codes/MYDBSM/DB"][0].tableName << endl;
             if (databaseTables.find(databaseName) == databaseTables.end()) {
                 cerr << "加载数据库失败或数据库不存在：" << databaseName << endl;
                 output<< "加载数据库失败或数据库不存在：" << databaseName << endl;
@@ -1370,6 +1375,7 @@ void handleShowContent(const string& sql, map<string, vector<Table>>& databaseTa
 
         cout << "表 " << tableName << " 的有效记录：" << endl;
         output << "表 " << tableName << " 的有效记录：" << endl;
+        writeResult();
         // 跳过表名、记录数量和字段名行
         string line;
         getline(datFile, line); // 表名行
@@ -1471,13 +1477,6 @@ void processSQLCommands(const string& sql, map<string, vector<Table>>& databaseT
 }
 
 
-
-
-
-
-
-
-
 /*
 // 主函数：解析语句
 int mainParse() {
@@ -1527,6 +1526,7 @@ void writeResult(string s)
 void writeResult()
 {
     results.push_back(output.str());
+    output.str("");
 }
 vector<string> streamParse(string s) {
     //map<string, vector<Table>> databaseTables;
@@ -1547,7 +1547,6 @@ vector<string> streamParse(string s) {
         processSQLCommands(command, databaseTables);
     }
     writeResult();
-    output.str("");
     return results;
 }
 
