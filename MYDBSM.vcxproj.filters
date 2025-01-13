@@ -46,6 +46,12 @@
     <ClCompile Include="DBMAKER.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="calculator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="calculator2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -59,6 +65,12 @@
     </ClInclude>
     <ClInclude Include="..\..\Users\erfensizec\Downloads\sqlMatch.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="calculator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="calculator2.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

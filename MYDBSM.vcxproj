@@ -92,6 +92,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="calculator.cpp" />
+    <ClCompile Include="calculator2.cpp" />
     <ClCompile Include="DBMAKER.cpp" />
     <ClCompile Include="reader.cpp" />
     <QtRcc Include="MYDBSM.qrc" />
@@ -105,6 +107,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Users\erfensizec\Downloads\sqlMatch.h" />
+    <ClInclude Include="calculator.h" />
+    <ClInclude Include="calculator2.h" />
     <ClInclude Include="DBMAKER.h" />
     <ClInclude Include="reader.h" />
   </ItemGroup>

@@ -18,6 +18,7 @@ private slots:
     void onButtonChoiceClicked();  // ²Ûº¯Êý
     void onCommitCommand();
     void onEditTable(QTableWidgetItem* item);
+    void loadTableFromString(string s);
     void onSelectTable(const QItemSelection& selected, const QItemSelection& deselected);
     void onDoubleClickTable(int row, int column);
     void refreshTableFromFile();

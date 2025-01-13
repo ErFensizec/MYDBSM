@@ -1,17 +1,6 @@
-# DB
-~MyTable
-2
-2
-Valid,Name,Age,
-0,xbs,10,
-0,xbs,10,
-1,sbx,9,
-1,xbs15,15,
-
 ~xiaoboshiTable
 2
 6
 Valid,Name,Age,XIAOBOSHI4,birth,birth2,birth3,
 1,testxbs,15,xx,NULL,NULL,NULL,
 1,testa,8,pp,NULL,NULL,NULL,
-

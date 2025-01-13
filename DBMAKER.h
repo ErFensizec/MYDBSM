@@ -30,6 +30,8 @@ public:
     string databaseName;
     int fieldCount;
     vector<Field> fields;
+    Table(){}
+    Table(std::string t, std::string d, int a) : tableName(t), databaseName(d),fieldCount(a) {}
 
     void print() const {
         cout << "Table Name: " << tableName << endl;
@@ -82,6 +84,10 @@ void handleAddField(const string& sql);
 void handleRemoveField(const string& sql);
 void handleModifyField(const string& sql);
 void processSQLCommands(const string& sql, map<string, vector<Table>>& databaseTables);
+void handleSelectContent_USE(const string& sql, map<string, vector<Table>>& databaseTables);
+void handleSelectContent_SELECT(const string& sql, map<string, vector<Table>>& databaseTables);
+void handleSelectContent_FROM(const string& sql, map<string, vector<Table>>& databaseTables);
+vector<vector<string>> readTable(string databaseName, string tableName);
 // ×ª»»×Ö·û´®ÎªÐ¡Ð´
 inline std::string toLowerCase(const std::string& str) {
     std::string lowerStr = str;
