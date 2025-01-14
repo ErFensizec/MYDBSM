@@ -19,9 +19,11 @@ MYDBSM::MYDBSM(QWidget *parent)
 
     connect(ui.button_choice, &QPushButton::clicked, this, &MYDBSM::onButtonChoiceClicked);
     connect(ui.button_commit, &QPushButton::clicked, this, &MYDBSM::onCommitCommand);
+    connect(ui.button_refresh, &QPushButton::clicked, this, &MYDBSM::onButtonRefreshClicked);
     connect(ui.table_result, &QTableWidget::itemChanged, this, &MYDBSM::onEditTable);
     connect(ui.table_result->selectionModel(), &QItemSelectionModel::selectionChanged, this, &MYDBSM::onSelectTable);
     connect(ui.table_result, &QTableWidget::cellDoubleClicked, this, &MYDBSM::onDoubleClickTable);
+
 }
 
 
@@ -80,7 +82,8 @@ void MYDBSM::onButtonChoiceClicked()
                         ui.table_result->setItem(rowNo - 1, i, new QTableWidgetItem(QString::fromStdString(field[headers[i]])));
                     t = ui.table_result->item(rowNo - 1, i);
                     if (t) {
-                        if(i==0||i==3||i==4||i==5)
+                        //if(i==0||i==3||i==4||i==5)
+                        if (i == 0)
                             t->setFlags(t->flags() & ~Qt::ItemIsEditable);//禁止编辑table_name,key_flag,null_flag,valid_flag
                     }
                 }
@@ -271,12 +274,35 @@ void MYDBSM::onEditTable(QTableWidgetItem* item) {
 
     // 获取修改后的内容
     QString newValue = item->text();
-    QString fieldname, tablename;
+    QString fieldname, tablename,type,isKey,allowNull,isValid;
     tablename = ui.table_result->item(row, 0)->text();
-    if(column>=1)
+    //QMessageBox::information(this, "Help", QString::fromStdString(""+to_string(ui.table_result->columnCount())));
+    if (column >= 1) {
         fieldname = ui.table_result->item(row, 1)->text();
+    }
+    if (column >= 2) {
+        type = ui.table_result->item(row, 2)->text();
+    }
+    if (column >= 3) {
+        isKey = ui.table_result->item(row, 3)->text();
+    }
+    if (column >= 4) {
+        allowNull = ui.table_result->item(row, 4)->text();
+    }
+    if (column >= 5) {
+        isValid = ui.table_result->item(row, 5)->text();
+    }
+        
+
     QString databasename = pureFilePath;
     if (loaded) {
+        fieldname = ui.table_result->item(row, 1)->text();
+        type = ui.table_result->item(row, 2)->text();
+        isKey = ui.table_result->item(row, 3)->text();
+        allowNull = ui.table_result->item(row, 4)->text();
+        isValid = ui.table_result->item(row, 5)->text();
+
+
         //保存
         vector<string> res;
         //QMessageBox::information(this, "Help", oldValue==newValue?"y" :"n");
@@ -288,7 +314,21 @@ void MYDBSM::onEditTable(QTableWidgetItem* item) {
         {
             res = streamParse("MODIFY FIELD " + fieldname.toStdString() + " TYPE " + newValue.toStdString() + " IN " + tablename.toStdString() + " IN " + pureFilePath.toStdString() + ";");
         }
-        
+        if (column == 3) {// EDIT TABLE tablename (fieldname,type, iskey,allowNULL,isValid)in db
+            //QMessageBox::information(this, "Help", "Send command:EDIT TABLE " + tablename.toStdString() + " ( " + fieldname.toStdString() + " " + type.toStdString() + " " + isKey.toStdString() + " " + allowNull.toStdString() + " " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";" );
+            //string ts= "EDIT TABLE " + tablename.toStdString() + " ( " + fieldname.toStdString() + " " + type.toStdString() + " " + isKey.toStdString() + " " + allowNull.toStdString() + " " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";";
+            //QMessageBox::information(this, "Help", QString::fromStdString(ts));
+            //QMessageBox::information(this, "Help", QString::fromStdString(ts));
+            res = streamParse("EDIT TABLE " + tablename.toStdString()+ " ( " + fieldname.toStdString()+" " + type.toStdString() + " " + isKey.toStdString()+" "+ allowNull.toStdString() +" " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";");
+        }
+        if (column == 4) {// EDIT TABLE tablename (fieldname,type, iskey,allowNULL,isValid)in db
+            //string ts = "EDIT TABLE " + tablename.toStdString() + " ( " + fieldname.toStdString() + " " + type.toStdString() + " " + isKey.toStdString() + " " + allowNull.toStdString() + " " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";";
+            //QMessageBox::information(this, "Help", QString::fromStdString(ts));
+            res = streamParse("EDIT TABLE " + tablename.toStdString() + " ( " + fieldname.toStdString() + " " + type.toStdString() + " " + isKey.toStdString() + " " + allowNull.toStdString() + " " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";");
+        }
+        if (column == 5) {// EDIT TABLE tablename (fieldname,type, iskey,allowNULL,isValid)in db
+            res = streamParse("EDIT TABLE " + tablename.toStdString() + " ( " + fieldname.toStdString() + " " + type.toStdString() + " " + isKey.toStdString() + " " + allowNull.toStdString() + " " + isValid.toStdString() + " ) IN " + pureFilePath.toStdString() + ";");
+        }
         for (int i = 0; i < res.size(); i++) {
             ui.list_info->addItem(QString::fromStdString(res[i]));
         }
@@ -348,4 +388,74 @@ void MYDBSM::onDoubleClickTable(int row, int column) {
     }*/
     ui.label_current_table->setText(QString::fromStdString(tablename));
 
+}
+
+void MYDBSM::onButtonRefreshClicked() {
+    //QMessageBox::information(this, "Help", QString::fromStdString("refresh"));
+    loaded = false;
+    // 如果文件路径不为空，则显示所选文件的路径
+    if (!filePath.isEmpty()) {
+        //QMessageBox::information(this, "文件选择", "您选择的文件是: " + filePath);
+        ui.label_root->setText(filePath);
+        refreshTableFromFile();
+    }
+
+
+    ifstream inFile(filePath.toStdString());
+    if (!inFile.is_open()) {
+        QMessageBox::information(this, "Alert", "cannot open database file!");
+        return;
+    }
+    try {
+        json dbJson;
+        inFile >> dbJson;
+        inFile.close();
+        int rowNo = 0;
+        ui.table_result->setRowCount(0);
+        ui.table_result->setColumnCount(6);
+        ui.table_result->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch); // 平分
+        ui.table_result->horizontalHeader()->setVisible(true);
+        ui.table_result->setHorizontalHeaderItem(0, new QTableWidgetItem("TableName"));
+        ui.table_result->setHorizontalHeaderItem(1, new QTableWidgetItem("FieldName"));
+        ui.table_result->setHorizontalHeaderItem(2, new QTableWidgetItem("Type"));
+        ui.table_result->setHorizontalHeaderItem(3, new QTableWidgetItem("isKey"));
+        ui.table_result->setHorizontalHeaderItem(4, new QTableWidgetItem("allowNull"));
+        ui.table_result->setHorizontalHeaderItem(5, new QTableWidgetItem("isValid"));
+
+        for (auto& tableJson : dbJson["tables"]) {
+            int columnNo = 0;
+            //ui.table_result->setRowCount(ui.table_result->rowCount() + 1);
+            for (auto& field : tableJson["fields"]) {
+                ui.table_result->setRowCount(ui.table_result->rowCount() + 1);
+                rowNo++;
+                //QMessageBox::information(this, "Help", QString::fromStdString(string(tableJson["table_name"])));
+                vector<string> headers({ "table_name","name","type","key_flag","null_flag","valid_flag" });
+                QTableWidgetItem* t;
+                for (int i = 0; i < headers.size(); i++)
+                {
+                    if (i == 0)
+                        ui.table_result->setItem(rowNo - 1, 0, new QTableWidgetItem(QString::fromStdString(tableJson[headers[0]])));
+                    else
+                        ui.table_result->setItem(rowNo - 1, i, new QTableWidgetItem(QString::fromStdString(field[headers[i]])));
+                    t = ui.table_result->item(rowNo - 1, i);
+                    if (t) {
+                        //if(i==0||i==3||i==4||i==5)
+                        if (i == 0)
+                            t->setFlags(t->flags() & ~Qt::ItemIsEditable);//禁止编辑table_name,key_flag,null_flag,valid_flag
+                    }
+                }
+
+            }
+        }
+        loaded = true;
+    }
+    catch (...) {
+        inFile.close();
+        QMessageBox::information(this, "Alert", "Invalid Database File!");
+        ui.table_result->horizontalHeader()->setVisible(false);
+        ui.table_result->setRowCount(0);
+        ui.table_result->setColumnCount(6);
+        loaded = false;
+    }
+    return;
 }

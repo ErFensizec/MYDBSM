@@ -147,12 +147,40 @@
                 {
                     "key_flag": "NOT_KEY",
                     "name": "Age",
-                    "null_flag": "NO_NULL",
+                    "null_flag": "NULL",
                     "type": "int[20]",
                     "valid_flag": "VALID"
                 }
             ],
             "table_name": "TXX5"
+        },
+        {
+            "database_name": "DB",
+            "field_count": 1,
+            "fields": [
+                {
+                    "key_flag": "NOT_KEY",
+                    "name": "Age",
+                    "null_flag": "NULL",
+                    "type": "int[20]",
+                    "valid_flag": "VALID"
+                }
+            ],
+            "table_name": "TXX6"
+        },
+        {
+            "database_name": "DB",
+            "field_count": 1,
+            "fields": [
+                {
+                    "key_flag": "NOT_KEY",
+                    "name": "Age",
+                    "null_flag": "NULL",
+                    "type": "int[20]",
+                    "valid_flag": "VALID"
+                }
+            ],
+            "table_name": "TXX7"
         }
     ]
 }

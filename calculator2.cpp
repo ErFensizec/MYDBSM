@@ -17,17 +17,18 @@ double getVariableValue(const std::unordered_map<std::string, double>& variableN
 
 // ÔËËãÓÅÏÈ¼¶
 int precedence(const std::string& op) {
-    if (op == "NOT") return 4;
+    //if(op=="("||op==")")return 999;
+    if (op == "NOT" || op == "!") return 4;
     if (op == "*" || op == "/" || op == "%") return 3;
     if (op == "+" || op == "-") return 2;
     if (op == ">" || op == "<" || op == "=") return 1;
-    if (op == "AND" || op == "OR") return 0;
+    if (op == "AND" || op == "OR" || op == "&&" || op == "||") return 0;
     return -1;
 }
 
 // Ö´ÐÐ²Ù×÷
 bool applyOperator(const std::string& op, std::stack<double>& values) {
-    if (op == "NOT") {
+    if (op == "NOT" || op == "!") {
         if (values.empty()) return false;
         double a = values.top(); values.pop();
         values.push((a == 0) ? 1 : 0);
@@ -44,8 +45,13 @@ bool applyOperator(const std::string& op, std::stack<double>& values) {
         else if (op == "<") values.push((a < b) ? 1 : 0);
         else if (op == "=") values.push((a == b) ? 1 : 0);
         else if (op == "%" && int(a) == a && int(b) == b) values.push((int(a) % int(b)));
-        else if (op == "AND") values.push(a && b);
-        else if (op == "OR") values.push(a || b);
+        //else if (op == "AND") values.push((a && b) ? 1 : 0);
+        else if (op == "AND" || op == "&&") {
+
+            std::cout << "AND" << a << ":" << b << std::endl;
+            values.push(a && b);
+        }
+        else if (op == "OR" || op == "||") values.push((a || b) ? 1 : 0);
         else {
             values.push(a);
             values.push(b);
@@ -63,33 +69,54 @@ std::vector<std::string> infixToPostfix(const std::string& expression) {
 
     std::string token;
     while (iss >> token) {
+        std::cout << "token is:" << token << " " << precedence(token) << "\n";
+        std::cout << "postfix_before:";
+        for (auto it : postfix)
+            std::cout << " " << it;
+        if (token == "AND") {
+            token = "&&";
+        }if (token == "OR") {
+            token = "||";
+        }if (token == "NOT") {
+            token = "!";
+        }
+
         if (std::isdigit(token[0]) || std::isalpha(token[0])) {
             postfix.push_back(token);
         }
-        else if (token == "(") {
-            ops.push(token);
-        }
-        else if (token == ")") {
-            while (!ops.empty() && ops.top() != "(") {
-                postfix.push_back(ops.top());
-                ops.pop();
+        else
+            if (token == "(") {
+                ops.push(token);
             }
-            if (!ops.empty()) ops.pop(); // µ¯³ö×óÀ¨ºÅ
-        }
-        else { // ²Ù×÷·û
-            while (!ops.empty() && precedence(ops.top()) >= precedence(token)) {
-                postfix.push_back(ops.top());
-                ops.pop();
-            }
-            ops.push(token);
-        }
+            else
+                if (token == ")") {
+                    while (!ops.empty() && ops.top() != "(") {
+                        postfix.push_back(ops.top());
+                        ops.pop();
+                    }
+                    if (!ops.empty()) ops.pop(); // µ¯³ö×óÀ¨ºÅ
+                }
+                else { // ²Ù×÷·û
+                    while (!ops.empty() && precedence(ops.top()) >= precedence(token)) {
+                        postfix.push_back(ops.top());
+                        ops.pop();
+                    }
+                    ops.push(token);
+                }
+        std::cout << "postfix_after:";
+        for (auto it : postfix)
+            std::cout << " " << it;
+        std::cout << "\n";
     }
 
     while (!ops.empty()) {
         postfix.push_back(ops.top());
         ops.pop();
     }
-
+    std::cout << "postfix:";
+    for (auto it : postfix) {
+        std::cout << " " << it;
+    }
     return postfix;
 }
 
@@ -130,26 +157,4 @@ bool parseWhereStatement(const std::string& input, const std::unordered_map<std:
     auto postfix = infixToPostfix(expression);
     return evaluatePostfix(postfix, variableNames);
 }
-/*
-// ²âÊÔ
-int main() {
-    //std::cout<<"value is:"<<3%5*2;
-    std::unordered_map<std::string, double> variableNames = {
-        {"x", 10},
-        {"y", 5},
-        {"z", 20}
-    };
 
-    std::string input = "WHERE ( x + y ) * z > 100 AND NOT ( y < 2 );";
-    std::string input2 = "WHERE x = 9;";
-    try {
-        bool result = parseWhereStatement(input, variableNames);
-        std::cout << "Expression result: " << std::boolalpha << result << std::endl;
-    }
-    catch (const std::exception& ex) {
-        std::cout << "Error: " << ex.what() << std::endl;
-    }
-
-    return 0;
-}
-*/

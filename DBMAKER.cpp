@@ -80,7 +80,7 @@ map<string, vector<Table>> loadDatabaseTables(const string& jsonFilePath) {
     ifstream inFile(jsonFilePath);
     if (!inFile.is_open()) {
         cerr << "无法打开文件: " << jsonFilePath << endl;
-        output << "无法打开文件: " << jsonFilePath << endl;
+        //output << "无法打开文件: " << jsonFilePath << endl;
         return {};
     }
 
@@ -149,6 +149,41 @@ Field parseField(const string& fieldLine) {
     return { match[1], match[2], match[3], match[4], match[5] };
 }
 
+
+Field parseField(const string& fieldLine,string fromDatabaseName) {
+    output << "parsing" << fieldLine << endl;
+    regex fieldRegex(R"((\w+)\s+(\w+\[\d+\]|\w+)\s+(KEY|NOT_KEY)\s+(NO_NULL|NULL)\s+(VALID|NOT_VALID))", regex_constants::icase);
+    regex fieldRegex2("(int|char|string)\\[\\d+\\]", regex_constants::icase);
+    smatch match, match2;
+    string trimmedField = trim(fieldLine);
+    if (!regex_match(trimmedField, match, fieldRegex)) {
+        throwError("Invalid field definition: " + fieldLine);
+        return { "","","","","" };
+    }
+    if (match.size() <= 2) {
+        return { "","","","","" };
+    }
+    string trimmedField2 = trim(match[2]);
+    output << "type is:" << trimmedField2 << endl;
+    if (!regex_match(trimmedField2, match2, fieldRegex2)) {
+        throwError("Invalid field definition: Must be int[],char[] or string[]");
+        return { "","","","","" };
+    }
+    bool has_key=false;
+    for (auto it : databaseTables[fromDatabaseName]) {
+        for (auto j : it.fields) {
+            if (j.keyFlag == "KEY") {
+                has_key = true;
+                break;
+            }
+        }
+    }
+    if (has_key && match[3] == "KEY") {
+        throwError("Invalid field definition: Already has KEY!");
+        return { "","","","","" };
+    }
+    return { match[1], match[2], match[3], match[4], match[5] };
+}
 // 解析语句
 Table parseCreateTableStatement(const string& sql) {
     Table table;
@@ -163,9 +198,8 @@ Table parseCreateTableStatement(const string& sql) {
     string fieldsSection = match[2];
     istringstream fieldsStream(fieldsSection);
     string fieldLine;
-
     while (getline(fieldsStream, fieldLine, ',')) {
-        Field field = parseField(fieldLine);
+        Field field = parseField(fieldLine,table.databaseName);
         if (!(field.type == "" && field.name == "" && field.keyFlag == "" && field.nullFlag == "" && field.validFlag == ""))
             table.fields.push_back(field);
         else {
@@ -288,44 +322,128 @@ void saveTablesToDatabaseFiles(map<string, vector<Table>>& databaseTables) {
 }
     
 
-
-
-// 编辑表字段//
-void editTableFields(const string& tableName, const string& databaseName, const vector<Field>& newFields) {
-    string filePath = databaseName + ".dbf";
+//new
+bool isPrimaryKeyDuplicate(const string& databaseName, const string& tableName, size_t primaryKeyIndex, const string& primaryKeyValue) {
     string datFilePath = databaseName + "_" + tableName + ".dat";
-    ifstream inFile(filePath);
-    json dbJson;
+    ifstream datFile(datFilePath, ios::binary);
 
-    // 读取现有数据
-    if (inFile.is_open()) {
-        try {
-            inFile >> dbJson; // 解析已有 JSON 文件
-        }
-        catch (const exception& e) {
-            cerr << "读取文件 " << filePath << " 时发生错误：" << e.what() << endl;
-            output << "读取文件 " << filePath << " 时发生错误：" << e.what() << endl;
-            inFile.close();
-            return;
-        }
-        inFile.close();
+    if (!datFile.is_open()) {
+        cerr << "表文件 " << datFilePath << " 不存在。" << endl;
+        output << "表文件 " << datFilePath << " 不存在。" << endl;
+        return false;
     }
 
-    if (!dbJson.contains("tables")) {
-        cerr << "表 " << tableName << " 不存在。" << endl;
-        output << "表 " << tableName << " 不存在。" << endl;
+    string line;
+    while (getline(datFile, line)) {
+        if (line.empty() || line[0] != '1') { // 跳过无效记录
+            continue;
+        }
+
+        istringstream recordStream(line);
+        vector<string> fields;
+        string field;
+
+        while (getline(recordStream, field, ',')) {
+            fields.push_back(field);
+        }
+
+        if (primaryKeyIndex < fields.size() && fields[primaryKeyIndex] == primaryKeyValue) {
+            return true; // 主键字段值已存在
+        }
+    }
+
+    return false;
+}
+
+void consolidateToDatabaseFile(const string& databaseName, const vector<Table>& tables) {
+    string databaseFilePath = databaseName + ".dat";
+    ofstream databaseFile(databaseFilePath, ios::binary);
+
+    if (!databaseFile.is_open()) {
+        cerr << "无法创建主数据库文件: " << databaseFilePath << endl;
+        output << "无法创建主数据库文件: " << databaseFilePath << endl;
         return;
     }
+
+    databaseFile << "# " << databaseName << '\n'; // 写入数据库标识
+
+    for (const auto& table : tables) {
+        string tableFilePath = databaseName + "_" + table.tableName + ".dat";
+        ifstream tableFile(tableFilePath, ios::binary);
+
+        if (!tableFile.is_open()) {
+            cerr << "无法打开表文件: " << tableFilePath << endl;
+            output << "无法打开表文件: " << tableFilePath << endl;
+            continue;
+        }
+
+        databaseFile << tableFile.rdbuf(); // 直接追加表文件内容到数据库文件
+        databaseFile.put('\n');            // 表之间添加换行分隔
+        tableFile.close();
+    }
+
+    databaseFile.close();
+    cout << "所有表已成功汇总到数据库文件 " << databaseFilePath << " 中。" << endl;
+    output << "所有表已成功汇总到数据库文件 " << databaseFilePath << " 中。" << endl;
+}
+
+// 编辑表字段//?汇总，数据随意改类型
+void editTableFields(const string& tableName, const string& databaseName, const vector<Field>& newFields, map<string, vector<Table>>& databaseTables) {
+    string filePath = databaseName + ".dbf";
+    string datFilePath = databaseName + "_" + tableName + ".dat";
+
+    // 读取数据库文件
+    ifstream inFile(filePath);
+    if (!inFile.is_open()) {
+        cerr << "无法打开数据库文件: " << filePath << endl;
+        output << "无法打开数据库文件: " << filePath << endl;
+        return;
+    }
+
+    json dbJson;
+    try {
+        inFile >> dbJson;
+    }
+    catch (const exception& e) {
+        cerr << "读取数据库文件时出错: " << e.what() << endl;
+        output << "读取数据库文件时出错: " << e.what() << endl;
+        inFile.close();
+        return;
+    }
+    inFile.close();
+
+    // 检查是否需要加载数据库到内存
+    if (databaseTables.find(databaseName) == databaseTables.end()) {
+        cout << "检测到数据库尚未加载，尝试加载数据库：" << databaseName << endl;
+        output << "检测到数据库尚未加载，尝试加载数据库：" << databaseName << endl;
+        databaseTables = loadDatabaseTables(databaseName + ".dbf");
+        if (databaseTables.find(databaseName) == databaseTables.end()) {
+            cerr << "加载数据库失败或数据库不存在：" << databaseName << endl;
+            output << "加载数据库失败或数据库不存在：" << databaseName << endl;
+            return;
+        }
+    }
+
+    // 获取内存中的表对象
+    auto& tables = databaseTables[databaseName];
+    auto it = std::find_if(tables.begin(), tables.end(), [&](const Table& table) {
+        return table.tableName == tableName;
+        });
+
+    if (it == tables.end()) {
+        cerr << "未找到表: " << tableName << endl;
+        output << "未找到表: " << tableName << endl;
+        return;
+    }
+
+    Table& table = *it;
 
     // 检查 .dat 文件是否有数据记录
     ifstream datFile(datFilePath);
     if (datFile.is_open()) {
         string line;
-        getline(datFile, line); // 跳过表名
-        getline(datFile, line); // 跳过记录数
-        getline(datFile, line); // 跳过字段数量
-        getline(datFile, line); // 跳过字段名
-        if (getline(datFile, line)) { // 检查是否有数据记录
+        for (int i = 0; i < 4; ++i) getline(datFile, line); // 跳过前 4 行
+        if (getline(datFile, line)) {
             cerr << "表 " << tableName << " 有数据记录，无法修改字段类型。" << endl;
             output << "表 " << tableName << " 有数据记录，无法修改字段类型。" << endl;
             datFile.close();
@@ -334,25 +452,23 @@ void editTableFields(const string& tableName, const string& databaseName, const 
         datFile.close();
     }
 
-    // 查找表并编辑字段
+    // 查找目标表
     bool found = false;
     for (auto& tableJson : dbJson["tables"]) {
         if (tableJson["table_name"] == tableName) {
             found = true;
 
-            // 更新字段：保留原字段，更新匹配字段，添加新字段
+            // 更新字段：逐一匹配并更新字段信息
             auto& existingFields = tableJson["fields"];
             for (const auto& newField : newFields) {
                 bool fieldExists = false;
-                // 检测字段类型是否合法
                 if (!regex_match(newField.type, regex("(int|char|string)\\[\\d+\\]"))) {
-                    cerr << "表中字段类型 " << newField.type << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
-                    output << "表中字段类型 " << newField.type << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
+                    cerr << "字段类型 " << newField.type << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
+                    output << "字段类型 " << newField.type << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
                     return;
                 }
                 for (auto& existingField : existingFields) {
                     if (existingField["name"] == newField.name) {
-                        // 更新现有字段的属性
                         existingField["type"] = newField.type;
                         existingField["key_flag"] = newField.keyFlag;
                         existingField["null_flag"] = newField.nullFlag;
@@ -362,23 +478,22 @@ void editTableFields(const string& tableName, const string& databaseName, const 
                     }
                 }
 
-                // 如果字段不存在，添加为新字段
                 if (!fieldExists) {
-                    json newFieldJson;
-                    newFieldJson["name"] = newField.name;
-                    newFieldJson["type"] = newField.type;
-                    newFieldJson["key_flag"] = newField.keyFlag;
-                    newFieldJson["null_flag"] = newField.nullFlag;
-                    newFieldJson["valid_flag"] = newField.validFlag;
+                    json newFieldJson = {
+                        {"name", newField.name},
+                        {"type", newField.type},
+                        {"key_flag", newField.keyFlag},
+                        {"null_flag", newField.nullFlag},
+                        {"valid_flag", newField.validFlag}
+                    };
                     existingFields.push_back(newFieldJson);
                 }
             }
 
-            // 如果新字段中有主键，确保其他字段的主键标志被更新为非主键
-            if (std::any_of(newFields.begin(), newFields.end(),
-                [](const Field& field) { return field.keyFlag == "KEY"; })) {
+            // 确保主键唯一性
+            if (std::any_of(newFields.begin(), newFields.end(), [](const Field& field) { return field.keyFlag == "KEY"; })) {
                 for (auto& existingField : existingFields) {
-                    if (existingField["name"] != newFields[0].name) {
+                    if (std::none_of(newFields.begin(), newFields.end(), [&](const Field& field) { return field.name == existingField["name"]; })) {
                         existingField["key_flag"] = "NOT_KEY";
                     }
                 }
@@ -394,18 +509,22 @@ void editTableFields(const string& tableName, const string& databaseName, const 
         return;
     }
 
-    // 写回文件
+    // 保存修改后的 JSON 数据
     ofstream outFile(filePath);
     if (outFile.is_open()) {
-        outFile << dbJson.dump(4); // 使用 4 个空格缩进
+        outFile << dbJson.dump(4);
         outFile.close();
-        cout << "表 " << tableName << " 的字段已更新。\n";
-        output << "表 " << tableName << " 的字段已更新。\n";
+        cout << "表 " << tableName << " 的字段已更新。" << endl;
+        output << "表 " << tableName << " 的字段已更新。" << endl;
     }
     else {
         cerr << "无法打开文件 " << filePath << " 进行写入。" << endl;
         output << "无法打开文件 " << filePath << " 进行写入。" << endl;
     }
+
+    // 调用汇总函数
+    tables = databaseTables[databaseName];
+    consolidateToDatabaseFile(databaseName, tables);
 }
 
 // 更改表名
@@ -760,7 +879,7 @@ void handleCreateTable(const string& sql, map<string, vector<Table>>& databaseTa
 }
 
 //表修改封装
-void handleEditTable(const string& sql) {
+void handleEditTable(const string& sql, map<string, vector<Table>>& databaseTables) {
     regex editRegex(R"(EDIT TABLE (\w+)\s*\(\s*(.+?)\s*\)\s*IN\s+(\S+);)", regex_constants::icase);
     smatch match;
     if (regex_match(sql, match, editRegex)) {
@@ -773,7 +892,7 @@ void handleEditTable(const string& sql) {
         string fieldLine;
 
         while (getline(fieldsStream, fieldLine, ',')) {
-            Field field = parseField(fieldLine);
+            Field field = parseField(fieldLine);//Field field = parseField(fieldLine);
             //
             if (!(field.type == "" && field.name == "" && field.keyFlag == "" && field.nullFlag == "" && field.validFlag == ""))
                 newFields.push_back(field);
@@ -783,7 +902,7 @@ void handleEditTable(const string& sql) {
             }
         }
 
-        editTableFields(tableName, databaseName, newFields);
+        editTableFields(tableName, databaseName, newFields,databaseTables);
     }
     else {
         cerr << "EDIT TABLE 语法错误：" << sql << endl;
@@ -845,7 +964,7 @@ void handleAddField(const string& sql) {
     if (regex_match(sql, match, addRegex)) {
         string tableName = match[1];
         string databaseName = match[3];
-        Field newField = parseField(match[2]);
+        Field newField = parseField(match[2],databaseName);//Field newField = parseField(match[2]);
         output << "new Field is:" << "@" <<newField.type << newField.name << newField.keyFlag<< newField.nullFlag<< newField.validFlag<< "@" << endl;
         if (!(newField.type == ""&& newField.name==""&&newField.keyFlag==""&&newField.nullFlag==""&&newField.validFlag==""))
             addFieldToTable(tableName, databaseName, newField);
@@ -998,38 +1117,6 @@ void insertRecordToTableFile(const string& databaseName, const string& tableName
     output<< "记录插入到表 " << tableName << " 成功。" << endl;
 }
 
-void consolidateToDatabaseFile(const string& databaseName, const vector<Table>& tables) {
-    string databaseFilePath = databaseName + ".dat";
-    ofstream databaseFile(databaseFilePath, ios::binary);
-
-    if (!databaseFile.is_open()) {
-        cerr << "无法创建主数据库文件: " << databaseFilePath << endl;
-        output<< "无法创建主数据库文件: " << databaseFilePath << endl;
-        return;
-    }
-
-    databaseFile << "# " << databaseName << '\n'; // 写入数据库标识
-
-    for (const auto& table : tables) {
-        string tableFilePath = databaseName + "_" + table.tableName + ".dat";
-        ifstream tableFile(tableFilePath, ios::binary);
-
-        if (!tableFile.is_open()) {
-            cerr << "无法打开表文件: " << tableFilePath << endl;
-            output<< "无法打开表文件: " << tableFilePath << endl;
-            continue;
-        }
-
-        databaseFile << tableFile.rdbuf(); // 直接追加表文件内容到数据库文件
-        databaseFile.put('\n');            // 表之间添加换行分隔
-        tableFile.close();
-    }
-
-    databaseFile.close();
-    cout << "所有表已成功汇总到数据库文件 " << databaseFilePath << " 中。" << endl;
-    output<< "所有表已成功汇总到数据库文件 " << databaseFilePath << " 中。" << endl;
-}
-
 
 void insertRecord(const string& databaseName, const string& tableName, const vector<string>& values, map<string, vector<Table>>& databaseTables) {
     if (databaseTables.find(databaseName) == databaseTables.end()) {
@@ -1057,7 +1144,19 @@ void insertRecord(const string& databaseName, const string& tableName, const vec
         return;
     }
 
-    // 验证每个字段的类型和长度
+    // 验证主键字段是否重复
+    for (size_t i = 0; i < table.fields.size(); ++i) {
+        const auto& field = table.fields[i];
+        if (field.keyFlag == "KEY") {
+            if (isPrimaryKeyDuplicate(databaseName, tableName, i + 1, values[i])) {
+                cerr << "字段 " << field.name << " 的值 \"" << values[i] << "\" 已存在，违反主键约束。" << endl;
+                output << "字段 " << field.name << " 的值 \"" << values[i] << "\" 已存在，违反主键约束。" << endl;
+                return;
+            }
+        }
+    }
+
+    // 验证字段类型和长度
     for (size_t i = 0; i < table.fields.size(); ++i) {
         const auto& field = table.fields[i];
         const auto& value = values[i];
@@ -1320,24 +1419,6 @@ void updateRecordInTableFile(const string& databaseName, const string& tableName
         }
     }
 
-    // 检查目标字段是否存在
-    if (fieldIndexMap.find(targetField) == fieldIndexMap.end()) {
-        cerr << "字段 " << targetField << " 不存在。" << endl;
-        output << "字段 " << targetField << " 不存在。" << endl;
-        datFile.close();
-        return;
-    }
-
-    // 检查条件字段是否存在
-    for (const auto& condition : conditions) {
-        if (fieldIndexMap.find(condition.first) == fieldIndexMap.end()) {
-            cerr << "字段 " << condition.first << " 不存在。" << endl;
-            output << "字段 " << condition.first << " 不存在。" << endl;
-            datFile.close();
-            return;
-        }
-    }
-
     // 确保表存在于数据库中
     auto it = databaseTables.find(databaseName);
     if (it == databaseTables.end()) {
@@ -1357,24 +1438,28 @@ void updateRecordInTableFile(const string& databaseName, const string& tableName
 
     Table& table = *tableIt;
 
-    // 构建字段名和类型的映射
-    map<string, string> fieldTypes;
+    // 检查目标字段是否为主键
+    bool isPrimaryKey = false;
+    size_t primaryKeyIndex = 0; // 主键索引
     for (const auto& field : table.fields) {
-        fieldTypes[field.name] = field.type;
+        if (field.name == targetField) {
+            if (field.keyFlag == "KEY") {
+                isPrimaryKey = true;
+            }
+            primaryKeyIndex = fieldIndexMap[targetField];
+            break;
+        }
     }
-    // 检查目标字段是否存在并提取类型
-    if (fieldTypes.find(targetField) == fieldTypes.end()) {
-        cerr << "字段 " << targetField << " 不存在于表 " << tableName << " 中。" << endl;
+
+    // 如果目标字段是主键，检查新值是否重复
+    if (isPrimaryKey && isPrimaryKeyDuplicate(databaseName, tableName, primaryKeyIndex, newValue)) {
+        cerr << "更新失败：主键字段 " << targetField << " 的值 \"" << newValue << "\" 已存在。" << endl;
+        output << "更新失败：主键字段 " << targetField << " 的值 \"" << newValue << "\" 已存在。" << endl;
+        datFile.close();
         return;
     }
-    string fieldType = fieldTypes[targetField];
 
-    // 验证目标字段值
-    Field targetFieldInfo{ targetField, fieldType };
-    if (validateFieldValue(targetFieldInfo, newValue) == false) {
-        return;
-    };
-
+    // 更新逻辑保持不变
     bool updated = false;
     vector<string> updatedLines;
 
@@ -1398,6 +1483,7 @@ void updateRecordInTableFile(const string& databaseName, const string& tableName
                 break;
             }
         }
+
         // 如果满足条件且记录有效，则更新目标字段
         if (matches && recordFields[0] == "1") {
             int targetIndex = fieldIndexMap[targetField];
@@ -1815,7 +1901,7 @@ void handleAddField(const string& sql, map<string, vector<Table>>& databaseTable
     if (regex_match(sql, match, addRegex)) {
         string tableName = match[1];
         string databaseName = match[3];
-        Field newField = parseField(match[2]);
+        Field newField = parseField(match[2],databaseName);//Field newField = parseField(match[2]);
         if (!(newField.type == "" && newField.name == "" && newField.keyFlag == "" && newField.nullFlag == "" && newField.validFlag == ""))
             addFieldToTable(tableName, databaseName, newField, databaseTables);
         else {
@@ -1829,7 +1915,7 @@ void handleAddField(const string& sql, map<string, vector<Table>>& databaseTable
     }
 }
 
-// 字段删除//
+// 字段删除////
 void removeFieldFromTable(const string& tableName, const string& databaseName, const string& fieldName, map<string, vector<Table>>& databaseTables) {
     // 确保数据库已加载
     if (databaseTables.find(databaseName) == databaseTables.end()) {
@@ -1875,69 +1961,65 @@ void removeFieldFromTable(const string& tableName, const string& databaseName, c
 
     string datFilePath = databaseName + "_" + tableName + ".dat";
     fstream datFile(datFilePath, ios::in);
-    if (!datFile.is_open()) {
-        cerr << "无法打开表文件: " << datFilePath << endl;
-        output << "无法打开表文件: " << datFilePath << endl;
-        return;
-    }
+    if (datFile.is_open()) {
 
-    // 读取文件内容
-    vector<string> fileLines;
-    string line;
-    while (getline(datFile, line)) {
-        fileLines.push_back(line);
-    }
-    datFile.close();
+        // 读取文件内容
+        vector<string> fileLines;
+        string line;
+        while (getline(datFile, line)) {
+            fileLines.push_back(line);
+        }
+        datFile.close();
 
-    // 修改第三行字段数
-    if (fileLines.size() < 4) {
-        cerr << "文件内容少于 4 行，无法完成操作。" << endl;
-        output << "文件内容少于 4 行，无法完成操作。" << endl;
-        return;
-    }
-    fileLines[2] = to_string(table.fieldCount);
+        // 修改第三行字段数
+        if (fileLines.size() < 4) {
+            cerr << "文件内容少于 4 行，无法完成操作。" << endl;
+            output << "文件内容少于 4 行，无法完成操作。" << endl;
+            return;
+        }
+        fileLines[2] = to_string(table.fieldCount);
 
-    // 修改第四行字段名称
-    string newHeader = "Valid,";
-    for (const auto& field : table.fields) {
-        newHeader += field.name + ",";
-    }
-    fileLines[3] = newHeader;
+        // 修改第四行字段名称
+        string newHeader = "Valid,";
+        for (const auto& field : table.fields) {
+            newHeader += field.name + ",";
+        }
+        fileLines[3] = newHeader;
 
-    // 删除数据行中对应字段
-    for (size_t i = 4; i < fileLines.size(); ++i) {
-        stringstream ss(fileLines[i]);
-        vector<string> cells;
-        string cell;
-        while (getline(ss, cell, ',')) {
-            cells.push_back(cell);
+        // 删除数据行中对应字段
+        for (size_t i = 4; i < fileLines.size(); ++i) {
+            stringstream ss(fileLines[i]);
+            vector<string> cells;
+            string cell;
+            while (getline(ss, cell, ',')) {
+                cells.push_back(cell);
+            }
+
+            // 删除目标字段位置
+            if (fieldIndex + 1 < cells.size()) {
+                cells.erase(cells.begin() + fieldIndex + 1);
+            }
+
+            // 重新构造行
+            string updatedLine;
+            for (const auto& c : cells) {
+                updatedLine += c + ",";
+            }
+            fileLines[i] = updatedLine;
         }
 
-        // 删除目标字段位置
-        if (fieldIndex + 1 < cells.size()) {
-            cells.erase(cells.begin() + fieldIndex + 1);
+        // 写回修改后的文件
+        ofstream outFile(datFilePath, ios::trunc | ios::binary);
+        if (!outFile.is_open()) {
+            cerr << "无法重新写入表文件: " << datFilePath << endl;
+            output << "无法重新写入表文件: " << datFilePath << endl;
+            return;
         }
-
-        // 重新构造行
-        string updatedLine;
-        for (const auto& c : cells) {
-            updatedLine += c + ",";
+        for (const auto& updatedLine : fileLines) {
+            outFile << updatedLine << '\n';
         }
-        fileLines[i] = updatedLine;
+        outFile.close();
     }
-
-    // 写回修改后的文件
-    ofstream outFile(datFilePath, ios::trunc | ios::binary);
-    if (!outFile.is_open()) {
-        cerr << "无法重新写入表文件: " << datFilePath << endl;
-        output << "无法重新写入表文件: " << datFilePath << endl;
-        return;
-    }
-    for (const auto& updatedLine : fileLines) {
-        outFile << updatedLine << '\n';
-    }
-    outFile.close();
-
     // 更新数据库元信息文件
     string dbfFilePath = databaseName + ".dbf";
     ifstream dbfFile(dbfFilePath);
@@ -1990,7 +2072,7 @@ void handleRemoveField(const string& sql, map<string, vector<Table>>& databaseTa
     }
 }
 
-//修改字段//
+//修改字段//?数据随意改类型//
 void modifyFieldInTable(const string& tableName, const string& databaseName, const string& oldFieldName, const string& newFieldName, const string& newType, map<string, vector<Table>>& databaseTables) {
     string filePath = databaseName + ".dbf";
     ifstream inFile(filePath);
@@ -2054,12 +2136,20 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
             bool datFileExists = datFile.is_open();
 
             // 查找目标字段并修改
+            bool fieldFound = false; // 标志位
             for (auto& field : tableJson["fields"]) {
                 if (field["name"] == oldFieldName) {
+                    fieldFound = true;
+
                     // 检查新字段类型是否有效
                     if (!newType.empty() && !regex_match(newType, regex("(int|char|string)\\[\\d+\\]"))) {
                         cerr << "表 " << tableName << " 中字段类型 " << newType << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
                         output << "表 " << tableName << " 中字段类型 " << newType << " 无效，仅支持 int[x], char[x], string[x] 格式。" << endl;
+                        return;
+                    }
+                    if (datFileExists && !newType.empty() && newType != field["type"].get<string>()) {
+                        cerr << "存在数据文件，禁止修改字段类型: " << oldFieldName << endl;
+                        output << "存在数据文件，禁止修改字段类型: " << oldFieldName << endl;
                         return;
                     }
                     // 更新字段信息到 JSON 数据
@@ -2081,6 +2171,7 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
                         output << "无法打开文件 " << filePath << " 进行写入。" << endl;
                         return;
                     }
+
                     // 如果 `dat` 文件存在，处理字段名和类型的约束
                     if (datFileExists) {
                         vector<string> fileLines;
@@ -2096,14 +2187,13 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
                             return;
                         }
 
-                        // 直接读取但跳过最后一个字段
+                        // 解析第三行字段名
                         stringstream ss(fileLines[3]);
                         string cell;
                         vector<string> fields;
                         while (getline(ss, cell, ',')) {
                             fields.push_back(cell);
                         }
-
 
                         auto it = find(fields.begin(), fields.end(), oldFieldName);
                         if (it == fields.end()) {
@@ -2118,26 +2208,20 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
                             *it = newFieldName;
                         }
 
-
                         // 检查类型转换规则
                         string currentType = field["type"];
                         if (!newType.empty() && currentType != newType) {
-                            // 允许从 int 或 char 转换为 string
                             if ((currentType.find("int") != string::npos || currentType.find("char") != string::npos) && newType.find("string") != string::npos) {
-                                // 允许 int 或 char 转换为 string
-                                // 不做任何处理，直接跳过
+                                // 允许从 int 或 char 转换为 string，直接跳过
                             }
-                            // 不允许从 string 转换为 int 或 char
                             else if (currentType.find("string") != string::npos && (newType.find("int") != string::npos || newType.find("char") != string::npos)) {
                                 cerr << "不允许将字段类型从 string 转换为 " << newType << "。" << endl;
                                 output << "不允许将字段类型从 string 转换为 " << newType << "。" << endl;
                                 return;
                             }
-                            // 允许同类型之间的大小变化：int -> int，char -> char
                             else if ((currentType.find("int") != string::npos || currentType.find("char") != string::npos || currentType.find("string") != string::npos) &&
                                 newType.find(currentType.substr(0, currentType.find('['))) != string::npos) {
-                                // 允许 int[x] 转为 int[y] 或 char[x] 转为 char[y]
-                                // 不做任何处理，直接跳过
+                                // 同类型大小变化允许，直接跳过
                             }
                             else {
                                 cerr << "不允许将字段类型从 " << currentType << " 转换为 " << newType << "。" << endl;
@@ -2146,11 +2230,13 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
                             }
                         }
 
-                        // 更新第四行内容，避免多余的逗号
+                        // 更新第四行内容
                         string updatedFields;
                         for (size_t i = 0; i < fields.size(); ++i) {
                             updatedFields += fields[i];
-                            updatedFields += ",";
+                            if (i != fields.size() - 1) {
+                                updatedFields += ",";
+                            }
                         }
                         fileLines[3] = updatedFields;
 
@@ -2171,17 +2257,26 @@ void modifyFieldInTable(const string& tableName, const string& databaseName, con
                     cout << endl;
                     output << endl;
                     datFile.close();
+                    // 调用汇总函数
+                    tables = databaseTables[databaseName];
+                    consolidateToDatabaseFile(databaseName, tables);
+                    return;
                 }
             }
 
-            return;
+            if (!fieldFound) { // 如果未找到字段
+                cerr << "未找到字段名称: " << oldFieldName << endl;
+                output << "未找到字段名称: " << oldFieldName << endl;
+                return;
+            }
+
+
         }
     }
 
     cerr << "未找到表: " << tableName << endl;
     output << "未找到表: " << tableName << endl;
-    // 调用汇总函数
-    consolidateToDatabaseFile(databaseName, tables);
+
 }
 //修改字段名或类型封装//
 void handleModifyField(const string& sql, map<string, vector<Table>>& databaseTables) {
@@ -3141,7 +3236,7 @@ void processSQLCommands(const string& tsql, map<string, vector<Table>>& database
             handleCreateTable(sql, databaseTables);
         }
         else if (containsIgnoreCase(sql, "EDIT TABLE")) {
-            handleEditTable(sql);
+            handleEditTable(sql, databaseTables);
         }
         else if (containsIgnoreCase(sql, "RENAME TABLE")) {
             handleRenameTable(sql, databaseTables);
